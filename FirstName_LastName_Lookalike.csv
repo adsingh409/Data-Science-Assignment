@@ -1,0 +1,34 @@
+from sklearn.metrics.pairwise import cosine_similarity
+import pandas as pd
+
+# Load datasets
+customers = pd.read_csv('Customers.csv')
+transactions = pd.read_csv('Transactions.csv')
+
+# Aggregate features
+customer_features = transactions.groupby('CustomerID').agg({
+    'TotalValue': 'sum',
+    'Quantity': 'sum'
+}).reset_index()
+
+# Example: Add categorical encoding (e.g., Region)
+customer_features = pd.merge(customer_features, customers[['CustomerID', 'Region']], on='CustomerID', how='left')
+customer_features['Region'] = customer_features['Region'].astype('category').cat.codes
+
+# Compute cosine similarity
+feature_matrix = customer_features.drop('CustomerID', axis=1)
+similarity_matrix = cosine_similarity(feature_matrix)
+
+# Build output for first 20 customers
+output = {}
+for idx, cust_id in enumerate(customer_features['CustomerID'][:20]):
+    similarities = similarity_matrix[idx]
+    top3_idx = similarities.argsort()[-4:-1][::-1]
+    output[cust_id] = [(customer_features.iloc[i]['CustomerID'], round(similarities[i], 2)) for i in top3_idx]
+
+# Save to CSV
+output_df = pd.DataFrame([
+    [cust, *sum([(x[0], x[1]) for x in lookalikes], [])]
+    for cust, lookalikes in output.items()
+], columns=['CustomerID', 'SimilarCustomer1', 'Score1', 'SimilarCustomer2', 'Score2', 'SimilarCustomer3', 'Score3'])
+output_df.to_csv('FirstName_LastName_Lookalike.csv', index=False)
